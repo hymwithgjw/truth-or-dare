@@ -1,0 +1,83 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>真心话大冒险</title>
+    <link rel="stylesheet" href="styles.css" />
+</head>
+<body>
+    <!-- 背景装饰 -->
+    <div class="bg-decoration">
+        <div class="circle c1"></div>
+        <div class="circle c2"></div>
+        <div class="circle c3"></div>
+    </div>
+
+    <div class="container">
+        <!-- 标题 -->
+        <header>
+            <h1 class="title">
+                <span class="title-truth">真心话</span>
+                <span class="title-divider">·</span>
+                <span class="title-dare">大冒险</span>
+            </h1>
+            <p class="subtitle">命运之轮，由你转动</p>
+        </header>
+
+        <!-- 模式切换 -->
+        <div class="mode-switcher">
+            <button class="mode-btn active" data-mode="truth" id="modeTruth">
+                <span class="mode-icon">💬</span>
+                <span class="mode-label">真心话</span>
+            </button>
+            <button class="mode-btn" data-mode="dare" id="modeDare">
+                <span class="mode-icon">🔥</span>
+                <span class="mode-label">大冒险</span>
+            </button>
+            <button class="mode-btn" data-mode="mix" id="modeMix">
+                <span class="mode-icon">🎲</span>
+                <span class="mode-label">混合随机</span>
+            </button>
+            <div class="mode-indicator"></div>
+        </div>
+
+        <!-- 卡片区域 -->
+        <div class="card-wrapper">
+            <div class="card" id="card">
+                <div class="card-inner" id="cardInner">
+                    <div class="card-front">
+                        <div class="card-question-mark">?</div>
+                        <div class="card-hint">点击下方按钮抽奖</div>
+                    </div>
+                    <div class="card-back">
+                        <div class="card-type-badge" id="typeBadge">真心话</div>
+                        <div class="card-content" id="cardContent">
+                            准备好被命运选中了吗？
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        <!-- 抽奖按钮 -->
+        <button class="draw-btn" id="drawBtn">
+            <span class="draw-btn-text">开始抽奖</span>
+            <span class="draw-btn-icon">🎯</span>
+        </button>
+
+        <!-- 历史记录 -->
+        <div class="history-section">
+            <div class="history-header">
+                <h3>📜 抽奖记录</h3>
+                <button class="clear-btn" id="clearBtn">清空</button>
+            </div>
+            <div class="history-list" id="historyList">
+                <div class="history-empty">还没有记录，开始抽奖吧！</div>
+            </div>
+        </div>
+    </div>
+
+    <script src="script.js"></script>
+</body>
+</html>
