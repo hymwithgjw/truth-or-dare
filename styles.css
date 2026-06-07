@@ -628,7 +628,7 @@ header {
 
 .history-item {
     display: flex;
-    align-items: center;
+    align-items: flex-start;
     gap: 10px;
     padding: 10px 14px;
     border-radius: 12px;
@@ -663,9 +663,8 @@ header {
 .history-item .h-text {
     flex: 1;
     color: var(--text-secondary);
-    overflow: hidden;
-    text-overflow: ellipsis;
-    white-space: nowrap;
+    word-break: break-word;
+    line-height: 1.4;
 }
 
 .history-item .h-time {
