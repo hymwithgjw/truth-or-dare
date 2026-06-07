@@ -3,7 +3,12 @@ const SUPABASE_URL = 'https://xmjmgfusfuyoifxbscur.supabase.co';
 const SUPABASE_KEY = 'sb_publishable_FpfJWcT59igaSPSue6nk0w_70Sac-wc';
 
 /* ============ 访客识别 ============ */
-const VISITOR_ID = localStorage.getItem('visitor_id') || crypto.randomUUID();
+function generateId() {
+    try { return crypto.randomUUID(); } catch (e) {}
+    try { return crypto.getRandomValues(new Uint32Array(4)).join('-'); } catch (e) {}
+    return Math.random().toString(36).substr(2) + Date.now().toString(36);
+}
+const VISITOR_ID = localStorage.getItem('visitor_id') || generateId();
 if (!localStorage.getItem('visitor_id')) {
     localStorage.setItem('visitor_id', VISITOR_ID);
 }
@@ -313,14 +318,26 @@ async function draw() {
     card.classList.remove('flipped');
 
     const shuffleInterval = setInterval(() => {
-        const preview = getRandomItem(currentMode);
-        cardContent.textContent = preview.text;
-        typeBadge.textContent = preview.type === 'truth' ? '真心话' : '大冒险';
-        typeBadge.className = 'card-type-badge ' + preview.type;
+        try {
+            const preview = getRandomItem(currentMode);
+            cardContent.textContent = preview.text;
+            typeBadge.textContent = preview.type === 'truth' ? '真心话' : '大冒险';
+            typeBadge.className = 'card-type-badge ' + preview.type;
+        } catch (e) {}
     }, 60);
 
-    setTimeout(async () => {
+    // 安全网：3秒后强制停止
+    const safetyTimer = setTimeout(() => {
         clearInterval(shuffleInterval);
+        isSpinning = false;
+        drawBtn.disabled = false;
+        drawBtn.classList.remove('spinning');
+        drawBtn.querySelector('.draw-btn-text').textContent = '再试一次';
+    }, 3000);
+
+    setTimeout(() => {
+        clearInterval(shuffleInterval);
+        clearTimeout(safetyTimer);
 
         const result = getRandomItem(currentMode);
         cardContent.textContent = result.text;
@@ -329,15 +346,14 @@ async function draw() {
 
         card.classList.add('flipped');
 
-        // 保存到数据库（后台执行，不阻塞）
-        saveRecordToDB(result.type, result.text);
+        // 后台保存，不阻塞
+        try { saveRecordToDB(result.type, result.text); } catch (e) {}
 
-        // 添加到本地历史
         const now = new Date();
         const timeStr = now.getHours().toString().padStart(2, '0') + ':' +
                         now.getMinutes().toString().padStart(2, '0');
         history.unshift({ ...result, time: timeStr });
-        renderHistory();
+        try { renderHistory(); } catch (e) {}
 
         isSpinning = false;
         drawBtn.disabled = false;
@@ -392,11 +408,12 @@ modeBtns.forEach(btn => {
 });
 
 /* ============ 初始化 ============ */
-(async function init() {
-    history = await loadRecordsFromDB();
-    renderHistory();
-    console.log('%c🎲 真心话大冒险已加载 (Supabase)', 'font-size:20px; font-weight:bold;');
-    console.log(`%c💬 真心话 ${QUESTIONS.truth.length} 题 | 🔥 大冒险 ${QUESTIONS.dare.length} 题`, 'font-size:14px;');
-    console.log(`%c👤 访客ID: ${VISITOR_ID.slice(0,8)}...`, 'font-size:12px;');
-    console.log('%c🔄 按 1/2/3 切换模式 | 空格键抽奖', 'font-size:12px;');
-})();
+function init() {
+    try { console.log('%c🎲 真心话大冒险已加载', 'font-size:20px; font-weight:bold;'); } catch (e) {}
+    // 后台加载历史记录，不阻塞页面
+    loadRecordsFromDB().then(data => {
+        history = data;
+        try { renderHistory(); } catch (e) {}
+    }).catch(() => {});
+}
+init();
