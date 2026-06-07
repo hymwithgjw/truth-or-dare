@@ -15,6 +15,10 @@ let history = [];
 const MAX_HISTORY = 100;
 
 async function supabaseFetch(path, options = {}) {
+    // 5 秒超时，避免网络问题卡住页面
+    const controller = new AbortController();
+    const timeout = setTimeout(() => controller.abort(), 5000);
+
     const url = SUPABASE_URL + path;
     const headers = {
         'apikey': SUPABASE_KEY,
@@ -22,12 +26,16 @@ async function supabaseFetch(path, options = {}) {
         'Content-Type': 'application/json',
         ...options.headers
     };
-    const res = await fetch(url, { ...options, headers });
-    if (!res.ok) {
-        const text = await res.text();
-        throw new Error(`Supabase ${res.status}: ${text}`);
+    try {
+        const res = await fetch(url, { ...options, headers, signal: controller.signal });
+        clearTimeout(timeout);
+        if (!res.ok) throw new Error(`HTTP ${res.status}`);
+        return res.json();
+    } catch (e) {
+        clearTimeout(timeout);
+        console.warn('Supabase 请求失败（不影响游戏）:', e.message);
+        return null;
     }
-    return res.json();
 }
 
 function formatTime(dateStr) {
@@ -36,8 +44,9 @@ function formatTime(dateStr) {
            d.getMinutes().toString().padStart(2, '0');
 }
 
-async function saveRecordToDB(type, content) {
-    return supabaseFetch('/rest/v1/records', {
+function saveRecordToDB(type, content) {
+    // 后台保存，不阻塞 UI
+    supabaseFetch('/rest/v1/records', {
         method: 'POST',
         body: JSON.stringify({ visitor_id: VISITOR_ID, type, content })
     });
@@ -47,7 +56,8 @@ async function loadRecordsFromDB() {
     const data = await supabaseFetch(
         `/rest/v1/records?visitor_id=eq.${encodeURIComponent(VISITOR_ID)}&order=created_at.desc&limit=${MAX_HISTORY}`
     );
-    return (data || []).map(r => ({
+    if (!data) return [];
+    return data.map(r => ({
         type: r.type,
         text: r.content,
         time: formatTime(r.created_at)
@@ -106,8 +116,8 @@ async function draw() {
 
         card.classList.add('flipped');
 
-        // 保存到数据库
-        await saveRecordToDB(result.type, result.text);
+        // 保存到数据库（后台执行，不阻塞）
+        saveRecordToDB(result.type, result.text);
 
         // 添加到本地历史
         const now = new Date();
