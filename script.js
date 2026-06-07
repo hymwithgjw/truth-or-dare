@@ -367,15 +367,11 @@ function setMode(m) {
         localStorage.setItem('vid', vid);
     }
 
-    function db(path, opt) {
-        try {
-            fetch(URL + path, {
-                headers: { 'apikey': KEY, 'Authorization': 'Bearer ' + KEY, 'Content-Type': 'application/json' },
-                ...opt
-            }).catch(function(){});
-        } catch(e) {}
+    function headers() {
+        return { 'apikey': KEY, 'Authorization': 'Bearer ' + KEY, 'Content-Type': 'application/json' };
     }
 
+    // 云端记录 → 本地格式
     function toRecord(d) {
         return {
             type: d.type,
@@ -385,72 +381,60 @@ function setMode(m) {
         };
     }
 
-    function mergeRecords(cloudRecords) {
-        // 以内容+名字+时间为唯一键去重
-        var seen = {};
-        for (var i = 0; i < history.length; i++) {
-            var h = history[i];
-            seen[h.name + '|' + h.text + '|' + h.time] = true;
-        }
-        var newOnes = [];
-        for (var i = 0; i < cloudRecords.length; i++) {
-            var r = cloudRecords[i];
-            var key = r.name + '|' + r.text + '|' + r.time;
-            if (!seen[key]) {
-                newOnes.push(r);
-                seen[key] = true;
+    // 拉取最新记录，合并到历史（新记录置顶）
+    function fetchAndMerge() {
+        fetch(URL + '/rest/v1/records?order=created_at.desc&limit=200', { headers: headers() })
+        .then(function(r) { return r.json(); })
+        .then(function(data) {
+            if (!data || !data.length) return;
+            var cloud = data.map(toRecord);
+
+            if (history.length === 0) {
+                // 首次加载，直接用
+                history = cloud;
+                render();
+                return;
             }
-        }
-        if (newOnes.length > 0) {
-            // 新记录放最前面，后面接已有的
-            history = newOnes.concat(history);
+
+            // 找出本地有但云端还没有的记录（刚抽到还没存上去的）
+            var localPending = [];
+            for (var i = 0; i < history.length; i++) {
+                var h = history[i];
+                var found = false;
+                for (var j = 0; j < cloud.length; j++) {
+                    if (h.name === cloud[j].name && h.text === cloud[j].text) {
+                        found = true;
+                        break;
+                    }
+                }
+                if (!found) localPending.push(h);
+            }
+
+            // 合并：本地未同步的（最新）→ 云端数据（最新在前）
+            // 但避免把本地已同步的再重复
+            history = localPending.concat(cloud);
+
+            // 截断最多200条
+            if (history.length > 200) history = history.slice(0, 200);
+
             render();
-        }
+        })
+        .catch(function(e) { /* 静默失败 */ });
     }
 
     // 初始加载
-    try {
-        var x = new XMLHttpRequest();
-        x.open('GET', URL + '/rest/v1/records?order=created_at.desc&limit=200');
-        x.setRequestHeader('apikey', KEY);
-        x.setRequestHeader('Authorization', 'Bearer ' + KEY);
-        x.onload = function() {
-            try {
-                var data = JSON.parse(x.responseText);
-                if (data && data.length) {
-                    history = data.map(toRecord);
-                    render();
-                }
-            } catch(e) {}
-        };
-        x.send();
-    } catch(e) {}
+    setTimeout(fetchAndMerge, 100);
 
-    // 每10秒自动拉取最新记录
-    setInterval(function() {
-        try {
-            var x2 = new XMLHttpRequest();
-            x2.open('GET', URL + '/rest/v1/records?order=created_at.desc&limit=200');
-            x2.setRequestHeader('apikey', KEY);
-            x2.setRequestHeader('Authorization', 'Bearer ' + KEY);
-            x2.onload = function() {
-                try {
-                    var data = JSON.parse(x2.responseText);
-                    if (data && data.length) {
-                        mergeRecords(data.map(toRecord));
-                    }
-                } catch(e) {}
-            };
-            x2.send();
-        } catch(e) {}
-    }, 10000);
+    // 每10秒自动刷新
+    setInterval(fetchAndMerge, 10000);
 
     // 保存到云端
     window.saveCloud = function(name, type, text) {
-        db('/rest/v1/records', {
+        fetch(URL + '/rest/v1/records', {
             method: 'POST',
+            headers: headers(),
             body: JSON.stringify({ visitor_id: vid, player_name: name, type: type, content: text })
-        });
+        }).catch(function(){});
     };
 })();
 
