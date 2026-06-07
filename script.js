@@ -376,7 +376,39 @@ function setMode(m) {
         } catch(e) {}
     }
 
-    // 加载历史
+    function toRecord(d) {
+        return {
+            type: d.type,
+            text: d.content,
+            name: d.player_name || '匿名',
+            time: d.created_at ? d.created_at.slice(11,16) : ''
+        };
+    }
+
+    function mergeRecords(cloudRecords) {
+        // 以内容+名字+时间为唯一键去重
+        var seen = {};
+        for (var i = 0; i < history.length; i++) {
+            var h = history[i];
+            seen[h.name + '|' + h.text + '|' + h.time] = true;
+        }
+        var newOnes = [];
+        for (var i = 0; i < cloudRecords.length; i++) {
+            var r = cloudRecords[i];
+            var key = r.name + '|' + r.text + '|' + r.time;
+            if (!seen[key]) {
+                newOnes.push(r);
+                seen[key] = true;
+            }
+        }
+        if (newOnes.length > 0) {
+            // 新记录放最前面，后面接已有的
+            history = newOnes.concat(history);
+            render();
+        }
+    }
+
+    // 初始加载
     try {
         var x = new XMLHttpRequest();
         x.open('GET', URL + '/rest/v1/records?order=created_at.desc&limit=200');
@@ -386,27 +418,32 @@ function setMode(m) {
             try {
                 var data = JSON.parse(x.responseText);
                 if (data && data.length) {
-                    var cloudRecords = data.map(function(d) {
-                        return { type: d.type, text: d.content, name: d.player_name || '匿名', time: d.created_at ? d.created_at.slice(11,16) : '' };
-                    });
-                    // 合并：把云端记录添加到本地后面（本地最新的放最前）
-                    var seen = {};
-                    history.forEach(function(h) { seen[h.name + '|' + h.text] = true; });
-                    // 从旧到新追加（云端的已按desc排序，反转后从旧到新追加）
-                    var toAdd = [];
-                    for (var i = cloudRecords.length - 1; i >= 0; i--) {
-                        var r = cloudRecords[i];
-                        var key = r.name + '|' + r.text;
-                        if (!seen[key]) { toAdd.push(r); seen[key] = true; }
-                    }
-                    // 本地记录保持最前面（最新），旧记录在后面
-                    history = history.concat(toAdd);
+                    history = data.map(toRecord);
                     render();
                 }
             } catch(e) {}
         };
         x.send();
     } catch(e) {}
+
+    // 每10秒自动拉取最新记录
+    setInterval(function() {
+        try {
+            var x2 = new XMLHttpRequest();
+            x2.open('GET', URL + '/rest/v1/records?order=created_at.desc&limit=200');
+            x2.setRequestHeader('apikey', KEY);
+            x2.setRequestHeader('Authorization', 'Bearer ' + KEY);
+            x2.onload = function() {
+                try {
+                    var data = JSON.parse(x2.responseText);
+                    if (data && data.length) {
+                        mergeRecords(data.map(toRecord));
+                    }
+                } catch(e) {}
+            };
+            x2.send();
+        } catch(e) {}
+    }, 10000);
 
     // 保存到云端
     window.saveCloud = function(name, type, text) {
