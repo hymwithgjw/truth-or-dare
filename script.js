@@ -379,7 +379,7 @@ function setMode(m) {
     // 加载历史
     try {
         var x = new XMLHttpRequest();
-        x.open('GET', URL + '/rest/v1/records?visitor_id=eq.' + vid + '&order=created_at.desc&limit=100');
+        x.open('GET', URL + '/rest/v1/records?order=created_at.desc&limit=200');
         x.setRequestHeader('apikey', KEY);
         x.setRequestHeader('Authorization', 'Bearer ' + KEY);
         x.onload = function() {
