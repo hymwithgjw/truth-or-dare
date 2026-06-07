@@ -386,9 +386,21 @@ function setMode(m) {
             try {
                 var data = JSON.parse(x.responseText);
                 if (data && data.length) {
-                    history = data.map(function(d) {
+                    var cloudRecords = data.map(function(d) {
                         return { type: d.type, text: d.content, name: d.player_name || '匿名', time: d.created_at ? d.created_at.slice(11,16) : '' };
                     });
+                    // 合并：把云端记录添加到本地后面（本地最新的放最前）
+                    var seen = {};
+                    history.forEach(function(h) { seen[h.name + '|' + h.text] = true; });
+                    // 从旧到新追加（云端的已按desc排序，反转后从旧到新追加）
+                    var toAdd = [];
+                    for (var i = cloudRecords.length - 1; i >= 0; i--) {
+                        var r = cloudRecords[i];
+                        var key = r.name + '|' + r.text;
+                        if (!seen[key]) { toAdd.push(r); seen[key] = true; }
+                    }
+                    // 本地记录保持最前面（最新），旧记录在后面
+                    history = history.concat(toAdd);
                     render();
                 }
             } catch(e) {}
