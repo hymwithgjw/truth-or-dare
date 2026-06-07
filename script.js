@@ -425,8 +425,8 @@ function setMode(m) {
     // 初始加载
     setTimeout(fetchAndMerge, 100);
 
-    // 每10秒自动刷新
-    setInterval(fetchAndMerge, 10000);
+    // 每3秒自动刷新
+    setInterval(fetchAndMerge, 3000);
 
     // 保存到云端
     window.saveCloud = function(name, type, text) {
