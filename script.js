@@ -1,83 +1,3 @@
-/* ============ Supabase 配置 ============ */
-const SUPABASE_URL = 'https://xmjmgfusfuyoifxbscur.supabase.co';
-const SUPABASE_KEY = 'sb_publishable_FpfJWcT59igaSPSue6nk0w_70Sac-wc';
-
-/* ============ 访客识别 ============ */
-function generateId() {
-    try { return crypto.randomUUID(); } catch (e) {}
-    try { return crypto.getRandomValues(new Uint32Array(4)).join('-'); } catch (e) {}
-    return Math.random().toString(36).substr(2) + Date.now().toString(36);
-}
-const VISITOR_ID = localStorage.getItem('visitor_id') || generateId();
-if (!localStorage.getItem('visitor_id')) {
-    localStorage.setItem('visitor_id', VISITOR_ID);
-}
-
-/* ============ 状态 ============ */
-let currentMode = 'truth';
-let isSpinning = false;
-let history = [];
-const MAX_HISTORY = 100;
-
-async function supabaseFetch(path, options = {}) {
-    // 5 秒超时，避免网络问题卡住页面
-    const controller = new AbortController();
-    const timeout = setTimeout(() => controller.abort(), 5000);
-
-    const url = SUPABASE_URL + path;
-    const headers = {
-        'apikey': SUPABASE_KEY,
-        'Authorization': 'Bearer ' + SUPABASE_KEY,
-        'Content-Type': 'application/json',
-        ...options.headers
-    };
-    try {
-        const res = await fetch(url, { ...options, headers, signal: controller.signal });
-        clearTimeout(timeout);
-        if (!res.ok) throw new Error(`HTTP ${res.status}`);
-        return res.json();
-    } catch (e) {
-        clearTimeout(timeout);
-        console.warn('Supabase 请求失败（不影响游戏）:', e.message);
-        return null;
-    }
-}
-
-function formatTime(dateStr) {
-    const d = new Date(dateStr);
-    return d.getHours().toString().padStart(2, '0') + ':' +
-           d.getMinutes().toString().padStart(2, '0');
-}
-
-function saveRecordToDB(type, content) {
-    // 后台保存，不阻塞 UI
-    supabaseFetch('/rest/v1/records', {
-        method: 'POST',
-        body: JSON.stringify({ visitor_id: VISITOR_ID, type, content })
-    });
-}
-
-async function loadRecordsFromDB() {
-    const data = await supabaseFetch(
-        `/rest/v1/records?visitor_id=eq.${encodeURIComponent(VISITOR_ID)}&order=created_at.desc&limit=${MAX_HISTORY}`
-    );
-    if (!data) return [];
-    return data.map(r => ({
-        type: r.type,
-        text: r.content,
-        time: formatTime(r.created_at)
-    }));
-}
-
-/* ============ DOM 引用 ============ */
-const card = document.getElementById('card');
-const cardInner = document.getElementById('cardInner');
-const cardContent = document.getElementById('cardContent');
-const typeBadge = document.getElementById('typeBadge');
-const drawBtn = document.getElementById('drawBtn');
-const historyList = document.getElementById('historyList');
-const modeBtns = document.querySelectorAll('.mode-btn');
-
 /* ============ 题库 ============ */
 const QUESTIONS = {
     truth: [
@@ -291,129 +211,142 @@ const QUESTIONS = {
     ]
 };
 
-/* ============ 核心逻辑 ============ */
-function getRandomItem(mode) {
-    if (mode === 'mix') {
-        const isTruth = Math.random() < 0.5;
-        const pool = isTruth ? QUESTIONS.truth : QUESTIONS.dare;
-        return {
-            text: pool[Math.floor(Math.random() * pool.length)],
-            type: isTruth ? 'truth' : 'dare'
-        };
-    }
-    const pool = QUESTIONS[mode];
+/* ============ DOM ============ */
+const card = document.getElementById('card');
+const cardContent = document.getElementById('cardContent');
+const typeBadge = document.getElementById('typeBadge');
+const drawBtn = document.getElementById('drawBtn');
+const historyList = document.getElementById('historyList');
+const modeBtns = document.querySelectorAll('.mode-btn');
+
+/* ============ 状态 ============ */
+let currentMode = 'truth';
+let spinning = false;
+let history = [];
+
+/* ============ 游戏核心 ============ */
+function pick(mode) {
+    const pool = mode === 'mix'
+        ? (Math.random() < 0.5 ? QUESTIONS.truth : QUESTIONS.dare)
+        : QUESTIONS[mode];
     return {
         text: pool[Math.floor(Math.random() * pool.length)],
-        type: mode
+        type: mode === 'mix' ? (pool === QUESTIONS.truth ? 'truth' : 'dare') : mode
     };
 }
 
-async function draw() {
-    if (isSpinning) return;
-    isSpinning = true;
+function draw() {
+    if (spinning) return;
+    spinning = true;
     drawBtn.disabled = true;
+    drawBtn.textContent = '🎯 抽取中...';
     drawBtn.classList.add('spinning');
-    drawBtn.querySelector('.draw-btn-text').textContent = '抽取中...';
-
     card.classList.remove('flipped');
 
-    const shuffleInterval = setInterval(() => {
-        try {
-            const preview = getRandomItem(currentMode);
-            cardContent.textContent = preview.text;
-            typeBadge.textContent = preview.type === 'truth' ? '真心话' : '大冒险';
-            typeBadge.className = 'card-type-badge ' + preview.type;
-        } catch (e) {}
+    // 洗牌动画
+    const timer = setInterval(() => {
+        const p = pick(currentMode);
+        cardContent.textContent = p.text;
+        typeBadge.textContent = p.type === 'truth' ? '真心话' : '大冒险';
+        typeBadge.className = 'card-type-badge ' + p.type;
     }, 60);
 
-    // 安全网：3秒后强制停止
-    const safetyTimer = setTimeout(() => {
-        clearInterval(shuffleInterval);
-        isSpinning = false;
-        drawBtn.disabled = false;
-        drawBtn.classList.remove('spinning');
-        drawBtn.querySelector('.draw-btn-text').textContent = '再试一次';
-    }, 3000);
-
+    // 1.5秒后出结果
     setTimeout(() => {
-        clearInterval(shuffleInterval);
-        clearTimeout(safetyTimer);
-
-        const result = getRandomItem(currentMode);
+        clearInterval(timer);
+        const result = pick(currentMode);
         cardContent.textContent = result.text;
         typeBadge.textContent = result.type === 'truth' ? '真心话' : '大冒险';
         typeBadge.className = 'card-type-badge ' + result.type;
-
         card.classList.add('flipped');
 
-        // 后台保存，不阻塞
-        try { saveRecordToDB(result.type, result.text); } catch (e) {}
+        history.unshift(result);
+        render();
 
-        const now = new Date();
-        const timeStr = now.getHours().toString().padStart(2, '0') + ':' +
-                        now.getMinutes().toString().padStart(2, '0');
-        history.unshift({ ...result, time: timeStr });
-        try { renderHistory(); } catch (e) {}
+        // 保存到云端（纯后台，失败不影响游戏）
+        try { window.saveCloud && window.saveCloud(result.type, result.text); } catch(e) {}
 
-        isSpinning = false;
+        spinning = false;
         drawBtn.disabled = false;
         drawBtn.classList.remove('spinning');
-        drawBtn.querySelector('.draw-btn-text').textContent = '再来一次';
+        drawBtn.textContent = '🎯 再来一次';
     }, 1500);
 }
 
-/* ============ 历史记录 ============ */
-function renderHistory() {
-    if (history.length === 0) {
+/* ============ 渲染 ============ */
+function render() {
+    if (!history.length) {
         historyList.innerHTML = '<div class="history-empty">还没有记录，开始抽奖吧！</div>';
         return;
     }
-    historyList.innerHTML = history.map(item => `
+    historyList.innerHTML = history.map((item, i) => `
         <div class="history-item">
             <span class="h-type ${item.type}">${item.type === 'truth' ? '真心话' : '大冒险'}</span>
             <span class="h-text">${item.text}</span>
-            <span class="h-time">${item.time}</span>
+            <span class="h-time">#${history.length - i}</span>
         </div>
     `).join('');
 }
 
 /* ============ 模式切换 ============ */
-function setMode(mode) {
-    currentMode = mode;
-    modeBtns.forEach(btn => {
-        btn.classList.toggle('active', btn.dataset.mode === mode);
-    });
-    if (!card.classList.contains('flipped')) return;
+function setMode(m) {
+    currentMode = m;
+    modeBtns.forEach(b => b.classList.toggle('active', b.dataset.mode === m));
     card.classList.remove('flipped');
-    drawBtn.querySelector('.draw-btn-text').textContent = '开始抽奖';
+    if (!spinning) drawBtn.textContent = '🎯 开始抽奖';
 }
 
-/* ============ 键盘快捷键 ============ */
-document.addEventListener('keydown', (e) => {
-    if (e.key === ' ') {
-        e.preventDefault();
-        draw();
+/* ============ 云端保存（独立后台，异常不影响游戏） ============ */
+(function() {
+    var URL = 'https://xmjmgfusfuyoifxbscur.supabase.co';
+    var KEY = 'sb_publishable_FpfJWcT59igaSPSue6nk0w_70Sac-wc';
+    var vid = localStorage.getItem('vid');
+    if (!vid) { vid = Math.random().toString(36).slice(2) + Date.now().toString(36); localStorage.setItem('vid', vid); }
+
+    function db(path, opt) {
+        try {
+            fetch(URL + path, {
+                headers: { 'apikey': KEY, 'Authorization': 'Bearer ' + KEY, 'Content-Type': 'application/json' },
+                ...opt
+            }).catch(function(){});
+        } catch(e) {}
     }
+
+    // 从云端加载历史
+    try {
+        var x = new XMLHttpRequest();
+        x.open('GET', URL + '/rest/v1/records?visitor_id=eq.' + vid + '&order=created_at.desc&limit=100');
+        x.setRequestHeader('apikey', KEY);
+        x.setRequestHeader('Authorization', 'Bearer ' + KEY);
+        x.onload = function() {
+            try {
+                var data = JSON.parse(x.responseText);
+                if (data && data.length) {
+                    history = data.map(function(d){ return {type:d.type, text:d.content}; });
+                    render();
+                }
+            } catch(e) {}
+        };
+        x.send();
+    } catch(e) {}
+
+    // 保存到云端（由 draw 函数内部调用，纯异步）
+    window.saveCloud = function(type, text) {
+        db('/rest/v1/records', { method: 'POST', body: JSON.stringify({ visitor_id: vid, type: type, content: text }) });
+    };
+})();
+
+/* ============ 事件绑定 ============ */
+drawBtn.addEventListener('click', function(){ draw(); });
+card.addEventListener('click', function(){ draw(); });
+modeBtns.forEach(b => b.addEventListener('click', () => setMode(b.dataset.mode)));
+
+/* ============ 键盘快捷键 ============ */
+document.addEventListener('keydown', e => {
+    if (e.key === ' ') { e.preventDefault(); draw(); }
     if (e.key === '1') setMode('truth');
     if (e.key === '2') setMode('dare');
     if (e.key === '3') setMode('mix');
 });
 
-/* ============ 事件绑定 ============ */
-drawBtn.addEventListener('click', draw);
-card.addEventListener('click', draw);
-
-modeBtns.forEach(btn => {
-    btn.addEventListener('click', () => setMode(btn.dataset.mode));
-});
-
-/* ============ 初始化 ============ */
-function init() {
-    try { console.log('%c🎲 真心话大冒险已加载', 'font-size:20px; font-weight:bold;'); } catch (e) {}
-    // 后台加载历史记录，不阻塞页面
-    loadRecordsFromDB().then(data => {
-        history = data;
-        try { renderHistory(); } catch (e) {}
-    }).catch(() => {});
-}
-init();
+console.log('%c🎲 真心话大冒险已加载', 'font-size:20px; font-weight:bold;');
