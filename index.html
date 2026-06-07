@@ -14,6 +14,19 @@
         <div class="circle c3"></div>
     </div>
 
+    <!-- 名字输入弹窗 -->
+    <div class="name-overlay" id="nameOverlay">
+        <div class="name-modal">
+            <div class="name-modal-icon">🎲</div>
+            <h2>欢迎来到真心话大冒险</h2>
+            <p class="name-modal-desc">输入你的名字开始游戏</p>
+            <div class="name-input-wrap">
+                <input type="text" id="nameInput" placeholder="输入名字..." maxlength="10" />
+                <button id="nameConfirmBtn">确认</button>
+            </div>
+        </div>
+    </div>
+
     <div class="container">
         <!-- 标题 -->
         <header>
@@ -25,32 +38,38 @@
             <p class="subtitle">命运之轮，由你转动</p>
         </header>
 
+        <!-- 当前玩家 -->
+        <div class="player-bar" id="playerBar">
+            👤 <span id="playerName">未设置</span>
+            <button class="change-name-btn" id="changeNameBtn">换名字</button>
+        </div>
+
         <!-- 模式切换 -->
         <div class="mode-switcher">
-            <button class="mode-btn active" data-mode="truth" id="modeTruth">
+            <button class="mode-btn active" data-mode="truth">
                 <span class="mode-icon">💬</span>
                 <span class="mode-label">真心话</span>
             </button>
-            <button class="mode-btn" data-mode="dare" id="modeDare">
+            <button class="mode-btn" data-mode="dare">
                 <span class="mode-icon">🔥</span>
                 <span class="mode-label">大冒险</span>
             </button>
-            <button class="mode-btn" data-mode="mix" id="modeMix">
+            <button class="mode-btn" data-mode="mix">
                 <span class="mode-icon">🎲</span>
                 <span class="mode-label">混合随机</span>
             </button>
-            <div class="mode-indicator"></div>
         </div>
 
         <!-- 卡片区域 -->
         <div class="card-wrapper">
             <div class="card" id="card">
-                <div class="card-inner" id="cardInner">
+                <div class="card-inner">
                     <div class="card-front">
                         <div class="card-question-mark">?</div>
                         <div class="card-hint">点击下方按钮抽奖</div>
                     </div>
                     <div class="card-back">
+                        <div class="card-owner" id="cardOwner"></div>
                         <div class="card-type-badge" id="typeBadge">真心话</div>
                         <div class="card-content" id="cardContent">
                             准备好被命运选中了吗？
@@ -70,6 +89,7 @@
         <div class="history-section">
             <div class="history-header">
                 <h3>📜 抽奖记录</h3>
+                <span class="history-count" id="historyCount">0 条</span>
             </div>
             <div class="history-list" id="historyList">
                 <div class="history-empty">还没有记录，开始抽奖吧！</div>
@@ -77,6 +97,6 @@
         </div>
     </div>
 
-    <script src="script.js?v=4"></script>
+    <script src="script.js?v=5"></script>
 </body>
 </html>

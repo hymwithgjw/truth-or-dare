@@ -212,96 +212,160 @@ const QUESTIONS = {
 };
 
 /* ============ DOM ============ */
-const card = document.getElementById('card');
-const cardContent = document.getElementById('cardContent');
-const typeBadge = document.getElementById('typeBadge');
-const drawBtn = document.getElementById('drawBtn');
-const historyList = document.getElementById('historyList');
-const modeBtns = document.querySelectorAll('.mode-btn');
+const dom = {
+    card: document.getElementById('card'),
+    cardContent: document.getElementById('cardContent'),
+    cardOwner: document.getElementById('cardOwner'),
+    typeBadge: document.getElementById('typeBadge'),
+    drawBtn: document.getElementById('drawBtn'),
+    historyList: document.getElementById('historyList'),
+    historyCount: document.getElementById('historyCount'),
+    modeBtns: document.querySelectorAll('.mode-btn'),
+    nameOverlay: document.getElementById('nameOverlay'),
+    nameInput: document.getElementById('nameInput'),
+    nameConfirmBtn: document.getElementById('nameConfirmBtn'),
+    playerName: document.getElementById('playerName'),
+    changeNameBtn: document.getElementById('changeNameBtn')
+};
 
 /* ============ 状态 ============ */
-let currentMode = 'truth';
+let mode = 'truth';
 let spinning = false;
 let history = [];
+let playerName = localStorage.getItem('pn') || '';
+
+/* ============ 名字逻辑 ============ */
+function showNameModal() {
+    dom.nameOverlay.classList.remove('hidden');
+    dom.nameInput.value = '';
+    dom.nameInput.focus();
+}
+
+function hideNameModal() {
+    dom.nameOverlay.classList.add('hidden');
+}
+
+function setName(name) {
+    name = name.trim();
+    if (!name) return;
+    playerName = name;
+    localStorage.setItem('pn', name);
+    dom.playerName.textContent = name;
+    hideNameModal();
+}
+
+dom.nameConfirmBtn.addEventListener('click', function() {
+    setName(dom.nameInput.value);
+});
+
+dom.nameInput.addEventListener('keydown', function(e) {
+    if (e.key === 'Enter') setName(dom.nameInput.value);
+});
+
+dom.changeNameBtn.addEventListener('click', showNameModal);
+
+if (!playerName) {
+    showNameModal();
+} else {
+    dom.playerName.textContent = playerName;
+}
 
 /* ============ 游戏核心 ============ */
-function pick(mode) {
-    const pool = mode === 'mix'
-        ? (Math.random() < 0.5 ? QUESTIONS.truth : QUESTIONS.dare)
-        : QUESTIONS[mode];
+function pick(m) {
+    var pool;
+    if (m === 'mix') {
+        pool = Math.random() < 0.5 ? QUESTIONS.truth : QUESTIONS.dare;
+    } else {
+        pool = QUESTIONS[m];
+    }
     return {
         text: pool[Math.floor(Math.random() * pool.length)],
-        type: mode === 'mix' ? (pool === QUESTIONS.truth ? 'truth' : 'dare') : mode
+        type: m === 'mix' ? (pool === QUESTIONS.truth ? 'truth' : 'dare') : m
     };
+}
+
+function now() {
+    var d = new Date();
+    return d.getHours().toString().padStart(2,'0') + ':' + d.getMinutes().toString().padStart(2,'0');
 }
 
 function draw() {
     if (spinning) return;
-    spinning = true;
-    drawBtn.disabled = true;
-    drawBtn.textContent = '🎯 抽取中...';
-    drawBtn.classList.add('spinning');
-    card.classList.remove('flipped');
+    if (!playerName) { showNameModal(); return; }
 
-    // 洗牌动画
-    const timer = setInterval(() => {
-        const p = pick(currentMode);
-        cardContent.textContent = p.text;
-        typeBadge.textContent = p.type === 'truth' ? '真心话' : '大冒险';
-        typeBadge.className = 'card-type-badge ' + p.type;
+    spinning = true;
+    dom.drawBtn.disabled = true;
+    dom.drawBtn.textContent = '🎯 抽取中...';
+    dom.drawBtn.classList.add('spinning');
+    dom.card.classList.remove('flipped');
+
+    var timer = setInterval(function() {
+        var p = pick(mode);
+        dom.cardContent.textContent = p.text;
+        dom.typeBadge.textContent = p.type === 'truth' ? '真心话' : '大冒险';
+        dom.typeBadge.className = 'card-type-badge ' + p.type;
     }, 60);
 
-    // 1.5秒后出结果
-    setTimeout(() => {
+    setTimeout(function() {
         clearInterval(timer);
-        const result = pick(currentMode);
-        cardContent.textContent = result.text;
-        typeBadge.textContent = result.type === 'truth' ? '真心话' : '大冒险';
-        typeBadge.className = 'card-type-badge ' + result.type;
-        card.classList.add('flipped');
+        var result = pick(mode);
+        dom.cardContent.textContent = result.text;
+        dom.typeBadge.textContent = result.type === 'truth' ? '真心话' : '大冒险';
+        dom.typeBadge.className = 'card-type-badge ' + result.type;
+        dom.cardOwner.innerHTML = '<strong>' + playerName + '</strong> 抽到了：';
+        dom.card.classList.add('flipped');
 
+        result.name = playerName;
+        result.time = now();
         history.unshift(result);
         render();
 
-        // 保存到云端（纯后台，失败不影响游戏）
-        try { window.saveCloud && window.saveCloud(result.type, result.text); } catch(e) {}
+        // 后台保存云端
+        try { if (window.saveCloud) window.saveCloud(playerName, result.type, result.text); } catch(e) {}
 
         spinning = false;
-        drawBtn.disabled = false;
-        drawBtn.classList.remove('spinning');
-        drawBtn.textContent = '🎯 再来一次';
+        dom.drawBtn.disabled = false;
+        dom.drawBtn.classList.remove('spinning');
+        dom.drawBtn.textContent = '🎯 再来一次';
     }, 1500);
 }
 
 /* ============ 渲染 ============ */
 function render() {
+    dom.historyCount.textContent = history.length + ' 条';
     if (!history.length) {
-        historyList.innerHTML = '<div class="history-empty">还没有记录，开始抽奖吧！</div>';
+        dom.historyList.innerHTML = '<div class="history-empty">还没有记录，开始抽奖吧！</div>';
         return;
     }
-    historyList.innerHTML = history.map((item, i) => `
-        <div class="history-item">
-            <span class="h-type ${item.type}">${item.type === 'truth' ? '真心话' : '大冒险'}</span>
-            <span class="h-text">${item.text}</span>
-            <span class="h-time">#${history.length - i}</span>
-        </div>
-    `).join('');
+    dom.historyList.innerHTML = history.map(function(item, i) {
+        var typeLabel = item.type === 'truth' ? '真心话' : '大冒险';
+        return '<div class="history-item">' +
+            '<span class="h-type ' + item.type + '">' + typeLabel + '</span>' +
+            '<span class="h-text"><strong>' + item.name + '</strong>: ' + item.text + '</span>' +
+            '<span class="h-time">' + item.time + '</span>' +
+        '</div>';
+    }).join('');
 }
 
 /* ============ 模式切换 ============ */
 function setMode(m) {
-    currentMode = m;
-    modeBtns.forEach(b => b.classList.toggle('active', b.dataset.mode === m));
-    card.classList.remove('flipped');
-    if (!spinning) drawBtn.textContent = '🎯 开始抽奖';
+    mode = m;
+    dom.modeBtns.forEach(function(b) {
+        b.classList.toggle('active', b.dataset.mode === m);
+    });
+    dom.card.classList.remove('flipped');
+    if (!spinning) dom.drawBtn.textContent = '🎯 开始抽奖';
 }
 
-/* ============ 云端保存（独立后台，异常不影响游戏） ============ */
+/* ============ 云端 ============ */
 (function() {
     var URL = 'https://xmjmgfusfuyoifxbscur.supabase.co';
     var KEY = 'sb_publishable_FpfJWcT59igaSPSue6nk0w_70Sac-wc';
     var vid = localStorage.getItem('vid');
-    if (!vid) { vid = Math.random().toString(36).slice(2) + Date.now().toString(36); localStorage.setItem('vid', vid); }
+    if (!vid) {
+        vid = Math.random().toString(36).slice(2) + Date.now().toString(36);
+        localStorage.setItem('vid', vid);
+    }
 
     function db(path, opt) {
         try {
@@ -312,7 +376,7 @@ function setMode(m) {
         } catch(e) {}
     }
 
-    // 从云端加载历史
+    // 加载历史
     try {
         var x = new XMLHttpRequest();
         x.open('GET', URL + '/rest/v1/records?visitor_id=eq.' + vid + '&order=created_at.desc&limit=100');
@@ -322,7 +386,9 @@ function setMode(m) {
             try {
                 var data = JSON.parse(x.responseText);
                 if (data && data.length) {
-                    history = data.map(function(d){ return {type:d.type, text:d.content}; });
+                    history = data.map(function(d) {
+                        return { type: d.type, text: d.content, name: d.player_name || '匿名', time: d.created_at ? d.created_at.slice(11,16) : '' };
+                    });
                     render();
                 }
             } catch(e) {}
@@ -330,23 +396,26 @@ function setMode(m) {
         x.send();
     } catch(e) {}
 
-    // 保存到云端（由 draw 函数内部调用，纯异步）
-    window.saveCloud = function(type, text) {
-        db('/rest/v1/records', { method: 'POST', body: JSON.stringify({ visitor_id: vid, type: type, content: text }) });
+    // 保存到云端
+    window.saveCloud = function(name, type, text) {
+        db('/rest/v1/records', {
+            method: 'POST',
+            body: JSON.stringify({ visitor_id: vid, player_name: name, type: type, content: text })
+        });
     };
 })();
 
 /* ============ 事件绑定 ============ */
-drawBtn.addEventListener('click', function(){ draw(); });
-card.addEventListener('click', function(){ draw(); });
-modeBtns.forEach(b => b.addEventListener('click', () => setMode(b.dataset.mode)));
+dom.drawBtn.addEventListener('click', draw);
+dom.card.addEventListener('click', draw);
+dom.modeBtns.forEach(function(b) {
+    b.addEventListener('click', function() { setMode(b.dataset.mode); });
+});
 
-/* ============ 键盘快捷键 ============ */
-document.addEventListener('keydown', e => {
+/* ============ 键盘 ============ */
+document.addEventListener('keydown', function(e) {
     if (e.key === ' ') { e.preventDefault(); draw(); }
     if (e.key === '1') setMode('truth');
     if (e.key === '2') setMode('dare');
     if (e.key === '3') setMode('mix');
 });
-
-console.log('%c🎲 真心话大冒险已加载', 'font-size:20px; font-weight:bold;');
