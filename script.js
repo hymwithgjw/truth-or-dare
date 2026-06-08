@@ -286,7 +286,9 @@ function pick(m) {
 
 function now() {
     var d = new Date();
-    return d.getHours().toString().padStart(2,'0') + ':' + d.getMinutes().toString().padStart(2,'0');
+    // 北京时间 (UTC+8)
+    d = new Date(d.getTime() + 8 * 3600000);
+    return d.toISOString().slice(11, 19);
 }
 
 function draw() {
@@ -373,12 +375,12 @@ function setMode(m) {
 
     // 云端记录 → 本地格式
     function toRecord(d) {
-        return {
-            type: d.type,
-            text: d.content,
-            name: d.player_name || '匿名',
-            time: d.created_at ? d.created_at.slice(11,16) : ''
-        };
+        var t = '';
+        if (d.created_at) {
+            var bj = new Date(new Date(d.created_at).getTime() + 8 * 3600000);
+            t = bj.toISOString().slice(11, 19);
+        }
+        return { type: d.type, text: d.content, name: d.player_name || '匿名', time: t };
     }
 
     // 拉取最新记录，合并到历史（新记录置顶）
